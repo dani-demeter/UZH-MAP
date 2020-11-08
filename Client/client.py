@@ -4,10 +4,10 @@ import requests
 # from scapy.all import *
 # from scapy.arch.windows import IFACES
 from math import sin, cos, sqrt, atan2, radians
+import tkinter as tk
 
-
-def main():
-    getBasicIPInfo()
+myIP = ""
+ipInfo = {}
 
 
 def calculateDistance(lat1, lon1, lat2, lon2):
@@ -41,6 +41,15 @@ def getBasicIPInfo():
 
     # UZH coordinates: (47.414259, 8.549612)
     print(f"Distance to server is {distanceToServer} kilometers.")
+    IPInfoLabel.configure(text=f"Your ISP: {ipInfo['isp']} \n"
+                          f"Your location: {ipInfo['lat']}, {ipInfo['lon']}")
 
 
-main()
+# getBasicIPInfo()
+window = tk.Tk()
+window.geometry("500x500")
+getIPButton = tk.Button(text="Retrieve IP Info", command=getBasicIPInfo)
+getIPButton.pack()
+IPInfoLabel = tk.Label(text="")
+IPInfoLabel.pack()
+window.mainloop()
