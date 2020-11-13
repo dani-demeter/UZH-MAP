@@ -5,9 +5,23 @@ import requests
 # from scapy.arch.windows import IFACES
 from math import sin, cos, sqrt, atan2, radians
 import tkinter as tk
+import subprocess
+import time
+import datetime
 
 myIP = ""
 ipInfo = {}
+
+
+def main():
+    # getBasicIPInfo()
+    window = tk.Tk()
+    window.geometry("500x500")
+    getIPButton = tk.Button(text="Retrieve IP Info", command=lambda: IPInfoLabel.configure(text=getBasicIPInfo()))
+    getIPButton.pack()
+    IPInfoLabel = tk.Label(text="")
+    IPInfoLabel.pack()
+    window.mainloop()
 
 
 def calculateDistance(lat1, lon1, lat2, lon2):
@@ -41,15 +55,22 @@ def getBasicIPInfo():
 
     # UZH coordinates: (47.414259, 8.549612)
     print(f"Distance to server is {distanceToServer} kilometers.")
-    IPInfoLabel.configure(text=f"Your ISP: {ipInfo['isp']} \n"
-                          f"Your location: {ipInfo['lat']}, {ipInfo['lon']}")
+    # IPInfoLabel.configure(text=f"Your ISP: {ipInfo['isp']} \n"
+    #                       f"Your location: {ipInfo['lat']}, {ipInfo['lon']}")
+    return (f"Your ISP: {ipInfo['isp']} \n"
+            f"Your location: {ipInfo['lat']}, {ipInfo['lon']}")
 
 
-# getBasicIPInfo()
-window = tk.Tk()
-window.geometry("500x500")
-getIPButton = tk.Button(text="Retrieve IP Info", command=getBasicIPInfo)
-getIPButton.pack()
-IPInfoLabel = tk.Label(text="")
-IPInfoLabel.pack()
-window.mainloop()
+def getTime():
+    return int(round(time.time() * 1000))
+
+# main()
+
+
+test = requests.get('http://127.0.0.1:3000')
+requestTime = test.elapsed / datetime.timedelta(milliseconds=1)
+print(f'Your request took {requestTime} ms')
+print(f'Speed at {len(test.content)/requestTime} bytes/ms')
+
+# p = subprocess.Popen(["ping", "localhost:3000"])
+# print(p.communicate()[0])
