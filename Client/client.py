@@ -8,6 +8,8 @@ import tkinter as tk
 import subprocess
 import time
 import datetime
+import pyshark
+
 
 myIP = ""
 ipInfo = {}
@@ -65,6 +67,13 @@ def getTime():
     return int(round(time.time() * 1000))
 
 # main()
+
+capture = pyshark.LiveCapture(interface='eth') 
+# use below variable in above function to filter only pcks from our server
+# display_filter = ip.src == (ip address of server) 
+#have to select right interface first!
+capture.sniff(timeout=10) # 10 sec recording of packages
+capture
 
 
 test = requests.get('http://127.0.0.1:3000')
