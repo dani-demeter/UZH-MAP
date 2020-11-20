@@ -66,20 +66,33 @@ def getBasicIPInfo():
 def getTime():
     return int(round(time.time() * 1000))
 
-# main()
 
-capture = pyshark.LiveCapture(interface='eth') 
+def getAverageDataResponses():
+    numberOfTries = 10
+    dataTypes = ["HTML", "video"]
+    for dataType in dataTypes:
+        averageRequestTime = 0
+        averageDataSpeed = 0
+        for i in range(numberOfTries):
+            test = requests.get(f'http://127.0.0.1:3000/{dataType}')
+            requestTime = test.elapsed / datetime.timedelta(milliseconds=1)
+            averageRequestTime += requestTime
+            averageDataSpeed += len(test.content) / requestTime
+        print(f'Your average {dataType} request took {averageRequestTime/numberOfTries} ms')
+        print(f'{dataType} Speed at {averageDataSpeed/numberOfTries} bytes/ms')
+
+
+getAverageDataResponses()
+main()
+
+
+# capture = pyshark.LiveCapture(interface='eth')
 # use below variable in above function to filter only pcks from our server
-# display_filter = ip.src == (ip address of server) 
-#have to select right interface first!
-capture.sniff(timeout=10) # 10 sec recording of packages
-capture
+# display_filter = ip.src == (ip address of server)
+# have to select right interface first!
+# capture.sniff(timeout=10)  # 10 sec recording of packages
+# capture
 
-
-test = requests.get('http://127.0.0.1:3000')
-requestTime = test.elapsed / datetime.timedelta(milliseconds=1)
-print(f'Your request took {requestTime} ms')
-print(f'Speed at {len(test.content)/requestTime} bytes/ms')
 
 # p = subprocess.Popen(["ping", "localhost:3000"])
 # print(p.communicate()[0])
