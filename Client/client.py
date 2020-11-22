@@ -1,7 +1,7 @@
 # pip install requests
 import requests
 # pip install scapy
-# from scapy.all import *
+from scapy.all import *
 # from scapy.arch.windows import IFACES
 from math import sin, cos, sqrt, atan2, radians
 import tkinter as tk
@@ -10,6 +10,9 @@ import time
 import datetime
 import pyshark
 from threading import Thread
+# IMPORT ENV VARIABLES
+import env
+print(env.serverIP)
 
 
 myIP = ""
@@ -75,7 +78,7 @@ def getAverageDataResponses():
         averageRequestTime = 0
         averageDataSpeed = 0
         for i in range(numberOfTries):
-            test = requests.get(f'http://192.41.136.236:3000/{dataType}')
+            test = requests.get(f'http://{env.serverIP}:3000/{dataType}')
             requestTime = test.elapsed / datetime.timedelta(milliseconds=1)
             averageRequestTime += requestTime
             averageDataSpeed += len(test.content) / requestTime
@@ -83,24 +86,25 @@ def getAverageDataResponses():
         print(f'{dataType} Speed at {averageDataSpeed/numberOfTries} bytes/ms')
 
 
+def pysharkCapture():
+    capture = pyshark.LiveCapture()
+    capture.display_filter = f"ip.src == {env.serverIP}"
+
+    thread = Thread(target=getAverageDataResponses, args=[])
+    thread.start()
+    try:
+        capture.sniff(timeout=5)  # 10 sec recording of packages
+    except:
+        pass
+    finally:
+        print(capture[0].__dict__)
+        capture.clear()
+        capture.close()
+
+
+def doTraceroute():
+    target = [env.serverIP]
+    result, unans = traceroute(target, maxttl=32)
+
+
 # main()
-
-
-capture = pyshark.LiveCapture()
-# use below variable in above function to filter only pcks from our server
-capture.display_filter = "ip.src == 192.41.136.236"
-# display_filter = ip.src == (ip address of server)
-# have to select right interface first!
-
-# getAverageDataResponses()
-
-thread = Thread(target=getAverageDataResponses, args=[])
-thread.start()
-try:
-    capture.sniff(timeout=5)  # 10 sec recording of packages
-except:
-    pass
-finally:
-    print(capture)
-    capture.clear()
-    capture.close()
