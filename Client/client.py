@@ -9,6 +9,7 @@ import subprocess
 import time
 import datetime
 import pyshark
+from threading import Thread
 
 
 myIP = ""
@@ -69,12 +70,12 @@ def getTime():
 
 def getAverageDataResponses():
     numberOfTries = 10
-    dataTypes = ["HTML", "video"]
+    dataTypes = ["HTML"]
     for dataType in dataTypes:
         averageRequestTime = 0
         averageDataSpeed = 0
         for i in range(numberOfTries):
-            test = requests.get(f'http://127.0.0.1:3000/{dataType}')
+            test = requests.get(f'http://192.41.136.236:3000/{dataType}')
             requestTime = test.elapsed / datetime.timedelta(milliseconds=1)
             averageRequestTime += requestTime
             averageDataSpeed += len(test.content) / requestTime
@@ -82,17 +83,24 @@ def getAverageDataResponses():
         print(f'{dataType} Speed at {averageDataSpeed/numberOfTries} bytes/ms')
 
 
-getAverageDataResponses()
-main()
+# main()
 
 
-# capture = pyshark.LiveCapture(interface='eth')
+capture = pyshark.LiveCapture()
 # use below variable in above function to filter only pcks from our server
+capture.display_filter = "ip.src == 192.41.136.236"
 # display_filter = ip.src == (ip address of server)
 # have to select right interface first!
-# capture.sniff(timeout=10)  # 10 sec recording of packages
-# capture
 
+# getAverageDataResponses()
 
-# p = subprocess.Popen(["ping", "localhost:3000"])
-# print(p.communicate()[0])
+thread = Thread(target=getAverageDataResponses, args=[])
+thread.start()
+try:
+    capture.sniff(timeout=5)  # 10 sec recording of packages
+except:
+    pass
+finally:
+    print(capture)
+    capture.clear()
+    capture.close()
