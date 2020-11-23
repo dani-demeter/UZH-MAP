@@ -14,10 +14,12 @@ def pi(filename,packets):
 class myHandler(BaseHTTPRequestHandler):
     
     def do_GET(self):
-        packets =  sniff(timeout=5)
+        ip =  self.path[8:]
+        print(ip)
+        packets =  sniff(timeout=5,filter =f'dst host {ip}')
         filename = 'sniff'
         print(self.path)
-        filename = filename + self.path[1:]
+        filename = filename + ip
         pi(filename,packets)
         self.send_response(200)
         self.send_header("Content-type", "text/html")
