@@ -21,12 +21,14 @@ def startSniffing():
     print("Starting sniffing")
     packets = sniff(timeout=5, filter=f'dst host {ip}')
     print("Finished sniffing")
-    dumpToFile(filename, packets)
-
-    infile = open(filename, 'rb')
-    new_dict = pickle.load(infile)
-    print(new_dict)
-    infile.close()
+    #dumpToFile(filename, packets)
+    outfile = open(filename,'wb')
+    pickle.dump(packets,outfile)
+    outfile.close()
+    #infile = open(filename, 'rb')
+    #new_dict = pickle.load(infile)
+    #print(new_dict)
+    #infile.close()
 
 
 thread = Thread(target=startSniffing, args=[])
