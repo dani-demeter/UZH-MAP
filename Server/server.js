@@ -34,7 +34,7 @@ app.get('/video', (req, res) => {
 app.get('/HTMLsniff', (req, res) => {
     console.log("Sending Python Sniff");
 	var ip = req.connection.remoteAddress
-  res.sendFile(path.join(__dirname + "/" + ip));
+  res.sendFile(path.join(__dirname + "/sniff" + ip));
 })
 
 app.listen(port, () => {
