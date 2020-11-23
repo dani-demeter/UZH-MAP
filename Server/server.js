@@ -13,7 +13,7 @@ app.get('/HTML', (req, res) => {
   console.log("Sending HTML");
   var ip = req.connection.remoteAddress
   var str1 = "http://127.0.0.1:3005/"; //executes the python script
-  var str2 = "ip";
+  var str2 = ip;
   var micros = str1.concat(str2);
   axios.get(micros)
   .then(response => {
