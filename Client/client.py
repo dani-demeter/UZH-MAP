@@ -10,6 +10,8 @@ import time
 import datetime
 import pyshark
 from threading import Thread
+import pickle
+
 # IMPORT ENV VARIABLES
 import env
 print(env.serverIP)
@@ -108,3 +110,7 @@ def doTraceroute():
 
 
 # main()
+infile = open("htmlsniff", 'rb')
+new_dict = pickle.load(infile)
+print(new_dict)
+infile.close()

@@ -25,7 +25,7 @@ app.get('/video', (req, res) => {
 
 app.get('/HTMLsniff', (req, res) => {
     console.log("Sending Python Sniff");
-    var formattedIP = (req.connection.remoteAddress).replaceAll(".", "_").replaceAll(":", "-");
+    var formattedIP = (req.connection.remoteAddress).replaceAll("::ffff:", "").replaceAll(".", "_").replaceAll(":", "-");
     res.sendFile(path.join(__dirname + "/sniff" + formattedIP));
 })
 
