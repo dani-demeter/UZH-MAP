@@ -5,38 +5,37 @@ const express = require('express')
 var path = require('path');
 const app = express()
 const port = process.env.PORT || 3000 // for heroku
-const axios = require('axios');
-
-
+const {execFile} = require('child_process');
 
 app.get('/HTML', (req, res) => {
-  console.log("Sending HTML");
-  var ip = req.connection.remoteAddress
-  var str1 = "http://127.0.0.1:3005/"; //executes the python script
-  var str2 = ip;
-  var micros = str1.concat(str2);
-  axios.get(micros)
-  .then(response => {
-    console.log(response);
-    console.log(response.data.explanation);
-  })
-  .catch(error => {
-    console.log(error);
-  });
-  res.sendFile(path.join(__dirname + '/index.html'));
-  //send scapy file res.sendFile(path.join(__dirname + '/index.html'));
+    console.log("Sending HTML");
+    var ip = req.connection.remoteAddress;
+
+    const python = execFile('python', ['serverSniffer.py', ip.toString()]);
+    python.stdout.on('data', function(data) {
+        console.log('Server Sniffer says:\n' + data.toString());
+    });
+    res.sendFile(path.join(__dirname + '/index.html'));
 })
+
 app.get('/video', (req, res) => {
     console.log("Sending video");
-  res.sendFile(path.join(__dirname + '/preview.mp4'));
+    res.sendFile(path.join(__dirname + '/preview.mp4'));
 })
 
 app.get('/HTMLsniff', (req, res) => {
     console.log("Sending Python Sniff");
-	var ip = req.connection.remoteAddress
-  res.sendFile(path.join(__dirname + "/sniff" + ip));
+    var formattedIP = (req.connection.remoteAddress).replaceAll(".", "_").replaceAll(":", "-");
+    res.sendFile(path.join(__dirname + "/sniff" + formattedIP));
 })
 
 app.listen(port, () => {
-  console.log(`Example app listening at http://localhost:${port}`)
+    console.log(`UZH-MAP listening at http://localhost:${port}`)
 })
+
+
+//for javascript's stupid string replacement
+String.prototype.replaceAll = function(str1, str2, ignore)
+{
+    return this.replace(new RegExp(str1.replace(/([\/\,\!\\\^\$\{\}\[\]\(\)\.\*\+\?\|\<\>\-\&])/g,"\\$&"),(ignore?"gi":"g")),(typeof(str2)=="string")?str2.replace(/\$/g,"$$$$"):str2);
+}
