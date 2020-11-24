@@ -9,12 +9,12 @@ const {execFile} = require('child_process');
 
 app.get('/HTML', (req, res) => {
     console.log("Sending HTML");
-    var ip = req.connection.remoteAddress;
+    //var ip = req.connection.remoteAddress;
 
-    const python = execFile('python', ['serverSniffer.py', ip.toString()]);
-    python.stdout.on('data', function(data) {
-        console.log('Server Sniffer says:\n' + data.toString());
-    });
+    //const python = execFile('python', ['serverSniffer.py', ip.toString()]);
+    //python.stdout.on('data', function(data) {
+    //    console.log('Server Sniffer says:\n' + data.toString());
+    //});
     res.sendFile(path.join(__dirname + '/index.html'));
 })
 
@@ -28,6 +28,17 @@ app.get('/HTMLsniff', (req, res) => {
     var formattedIP = (req.connection.remoteAddress).replaceAll("::ffff:", "").replaceAll(".", "_").replaceAll(":", "-");
     console.log("Formatted IP: " + formattedIP);
     res.sendFile(path.join(__dirname + "/sniff" + formattedIP));
+})
+
+app.get('/startsniff', (req, res) => {
+    console.log("Starting Sniff");
+    var ip = req.connection.remoteAddress;
+
+    const python = execFile('python', ['serverSniffer.py', ip.toString()]);
+    python.stdout.on('data', function(data) {
+        console.log('Server Sniffer says:\n' + data.toString());
+    });
+    res.sendStatus(200);
 })
 
 app.listen(port, () => {

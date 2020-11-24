@@ -122,8 +122,10 @@ def dumpToFile(filename, content):
 
 
 def scapySniff():
+    print("Starting sniffing on server")
+    r = requests.get("http://" + env.serverIP + ":3000/startsniff")
     print("Started sniffing")
-    packets = sniff(timeout=5, filter=f'tcp and host {env.serverIP}')
+    packets = sniff(timeout=7, filter=f'tcp and src host {env.serverIP}')
     print("Finished sniffing")
     collectPackets(packets)
 
@@ -171,6 +173,6 @@ def startSniff():
 
 
 # startSniff()
-loadPacketsFromFiles()
+#loadPacketsFromFiles()
 
 # main()

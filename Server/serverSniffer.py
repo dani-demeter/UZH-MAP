@@ -28,6 +28,7 @@ def startSniffing():
     print(f"The data you collected from {ip} is: {new_dict}")
     infile.close()
 
+startSniffing()
+#thread = Thread(target=startSniffing, args=[])
+#thread.start()
 
-thread = Thread(target=startSniffing, args=[])
-thread.start()
