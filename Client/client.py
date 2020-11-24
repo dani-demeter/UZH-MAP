@@ -12,9 +12,10 @@ import pyshark
 from threading import Thread
 import pickle
 
+import urllib
+
 # IMPORT ENV VARIABLES
 import env
-print(env.serverIP)
 
 
 myIP = ""
@@ -109,8 +110,67 @@ def doTraceroute():
     result, unans = traceroute(target, maxttl=32)
 
 
+def prettyPrintPacket(packet):
+    print(f"Packet {packet.summary()} with time: {packet.time}")
+
+
+def dumpToFile(filename, content):
+    print(f'Dumping to {filename}')
+    outfile = open(filename, 'wb')
+    pickle.dump(content, outfile)
+    outfile.close()
+
+
+def scapySniff():
+    print("Started sniffing")
+    packets = sniff(timeout=5, filter=f'tcp and host {env.serverIP}')
+    print("Finished sniffing")
+    collectPackets(packets)
+
+
+def collectPackets(clientPackets):
+    serverPackets = pickle.load(urllib.request.urlopen("http://" + env.serverIP + ":3000/htmlsniff"))
+    dumpToFile("serverPacketsByClient", serverPackets)
+    dumpToFile("clientPacketsByClient", clientPackets)
+    analyzePackets(clientPackets)
+    analyzePackets(serverPackets)
+
+
+def analyzePackets(packets):
+    for packet in packets:
+        prettyPrintPacket(packet)
+
+
+def loadPacketsFromFiles():  # FOR DEVELOPMENT
+    serverPackets = pickle.load(open("serverPacketsByClient", 'rb'))
+    clientPackets = pickle.load(open("clientPacketsByClient", 'rb'))
+    for serverPacket in serverPackets:
+        print(serverPacket.mysummary())
+    print()
+    for clientPacket in clientPackets:
+        print(clientPacket.mysummary())
+    print()
+    # print(serverPackets[0].show())
+    # print(clientPackets[0].show())
+    # print(serverPackets[0][0].chksum)
+    # print(clientPackets[0][0].chksum)
+    # CHECK FOR MATCHES
+    # for serverPacket in serverPackets:
+    #     for clientPacket in clientPackets:
+    #         if serverPacket[2].seq == clientPacket[2].seq:
+    #             print(f"Found a packet match {serverPacket.time} {clientPacket.time}")
+    # analyzePackets(clientPackets)
+    # print()
+    # analyzePackets(serverPackets)
+
+
+def startSniff():
+    thread = Thread(target=scapySniff, args=[])
+    thread.start()
+    requests.get("http://" + env.serverIP + ":3000/html")
+
+
+# startSniff()
+loadPacketsFromFiles()
+
 # main()
-infile = open("htmlsniff", 'rb')
-new_dict = pickle.load(infile)
-print(new_dict)
-infile.close()
