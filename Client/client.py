@@ -8,7 +8,7 @@ import tkinter as tk
 import subprocess
 import time
 import datetime
-import pyshark
+#import pyshark
 from threading import Thread
 import pickle
 
@@ -172,6 +172,14 @@ def startSniff():
     time.sleep(1)
     requests.get("http://" + env.serverIP + ":3000/html")
 
+
+# def checkPorts():
+    # listPorts = ["80","443"]
+    # for p in listPorts:
+        # try
+            # r = requests.get(f'http://portquiz.net:{p}')
+        # except
+            # failedports = []
 
 # startSniff()
 #loadPacketsFromFiles()
