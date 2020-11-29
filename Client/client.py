@@ -8,7 +8,7 @@ import tkinter as tk
 import subprocess
 import time
 import datetime
-#import pyshark
+# import pyshark
 from threading import Thread
 import pickle
 
@@ -26,7 +26,8 @@ def main():
     # getBasicIPInfo()
     window = tk.Tk()
     window.geometry("500x500")
-    getIPButton = tk.Button(text="Retrieve IP Info", command=lambda: IPInfoLabel.configure(text=getBasicIPInfo()))
+    getIPButton = tk.Button(
+        text="Retrieve IP Info", command=lambda: IPInfoLabel.configure(text=getBasicIPInfo()))
     getIPButton.pack()
     IPInfoLabel = tk.Label(text="")
     IPInfoLabel.pack()
@@ -60,7 +61,8 @@ def getBasicIPInfo():
     # print(ipInfo)
     print(f"Your ISP: {ipInfo['isp']} \n"
           f"Your location: {ipInfo['lat']}, {ipInfo['lon']}")
-    distanceToServer = calculateDistance(ipInfo['lat'], ipInfo['lon'], 47.414259, 8.549612)
+    distanceToServer = calculateDistance(
+        ipInfo['lat'], ipInfo['lon'], 47.414259, 8.549612)
 
     # UZH coordinates: (47.414259, 8.549612)
     print(f"Distance to server is {distanceToServer} kilometers.")
@@ -85,24 +87,9 @@ def getAverageDataResponses():
             requestTime = test.elapsed / datetime.timedelta(milliseconds=1)
             averageRequestTime += requestTime
             averageDataSpeed += len(test.content) / requestTime
-        print(f'Your average {dataType} request took {averageRequestTime/numberOfTries} ms')
+        print(
+            f'Your average {dataType} request took {averageRequestTime/numberOfTries} ms')
         print(f'{dataType} Speed at {averageDataSpeed/numberOfTries} bytes/ms')
-
-
-def pysharkCapture():
-    capture = pyshark.LiveCapture()
-    capture.display_filter = f"ip.src == {env.serverIP}"
-
-    thread = Thread(target=getAverageDataResponses, args=[])
-    thread.start()
-    try:
-        capture.sniff(timeout=5)  # 10 sec recording of packages
-    except:
-        pass
-    finally:
-        print(capture[0].__dict__)
-        capture.clear()
-        capture.close()
 
 
 def doTraceroute():
@@ -121,67 +108,118 @@ def dumpToFile(filename, content):
     outfile.close()
 
 
-def scapySniff():
-    print("Started sniffing")
-    packets = sniff(timeout=7, filter=f'tcp and src host {env.serverIP}')
-    print("Finished sniffing")
-    collectPackets(packets)
-
-
-def collectPackets(clientPackets):
-    serverPackets = pickle.load(urllib.request.urlopen("http://" + env.serverIP + ":3000/htmlsniff"))
-    dumpToFile("serverPacketsByClient", serverPackets)
-    dumpToFile("clientPacketsByClient", clientPackets)
-    analyzePackets(clientPackets)
-    analyzePackets(serverPackets)
-
-
-def analyzePackets(packets):
+def cleanPackets(packets):  # removes all ssh files and only shows packets with load
+    res = []
     for packet in packets:
-        prettyPrintPacket(packet)
+        if TCP in packet:
+            if Raw in packet:
+                if packet.sport == 3000:
+                    res.append(packet)
+    return res
 
 
-def loadPacketsFromFiles():  # FOR DEVELOPMENT
-    serverPackets = pickle.load(open("serverPacketsByClient", 'rb'))
-    clientPackets = pickle.load(open("clientPacketsByClient", 'rb'))
-    for serverPacket in serverPackets:
-        print(serverPacket.mysummary())
-    print()
-    for clientPacket in clientPackets:
-        print(clientPacket.mysummary())
-    print()
-    # print(serverPackets[0].show())
-    # print(clientPackets[0].show())
-    # print(serverPackets[0][0].chksum)
-    # print(clientPackets[0][0].chksum)
-    # CHECK FOR MATCHES
-    # for serverPacket in serverPackets:
-    #     for clientPacket in clientPackets:
-    #         if serverPacket[2].seq == clientPacket[2].seq:
-    #             print(f"Found a packet match {serverPacket.time} {clientPacket.time}")
-    # analyzePackets(clientPackets)
-    # print()
-    # analyzePackets(serverPackets)
+def startSniff(fileTypes):
+    for fileType in fileTypes:
+        thread = Thread(target=scapySniff, args=[fileType])
+        thread.start()
+        startServerSniffAndSendFile(fileType)
+        thread.join()
+    loadPacketsFromFiles(fileTypes)
 
 
-def startSniff():
-    thread = Thread(target=scapySniff, args=[])
-    thread.start()
-    print("Starting sniffing on server")
-    r = requests.get("http://" + env.serverIP + ":3000/startsniff")
+def scapySniff(fileType):
+    print(f"Started {fileType} sniffing on client")
+    packets = sniff(timeout=7, filter=f'tcp and src host {env.serverIP}')
+    print(f"Finished {fileType} sniffing on client")
+    collectPackets(packets, fileType)
+
+
+def collectPackets(clientPackets, fileType):
+    serverPackets = pickle.load(urllib.request.urlopen(
+        "http://" + env.serverIP + ":3000/packets"))
+    serverPackets = cleanPackets(serverPackets)
+    clientPackets = cleanPackets(clientPackets)
+    dumpToFile("pickle/serverPackets_"+fileType, serverPackets)
+    dumpToFile("pickle/clientPackets_"+fileType, clientPackets)
+    # analyzePackets(serverPackets, clientPackets)
+
+
+def startServerSniffAndSendFile(fileType):
+    print(f"Starting {fileType} sniffing on server")
+    requests.get("http://" + env.serverIP + ":3000/startsniff")
     time.sleep(1)
-    requests.get("http://" + env.serverIP + ":3000/html")
+    requests.get("http://" + env.serverIP + ":3000/" + fileType)
+
+
+def loadPacketsFromFiles(fileTypes):
+    collectedPackets = {}
+    for fileType in fileTypes:
+        serverPackets = pickle.load(
+            open("pickle/serverPackets_"+fileType, 'rb'))
+        clientPackets = pickle.load(
+            open("pickle/clientPackets_"+fileType, 'rb'))
+        collectedPackets[fileType] = (serverPackets, clientPackets)
+    extractMetrics(collectedPackets)
+
+
+def extractMetrics(collectedPackets):
+    metricDictionary = {}
+    for fileType in collectedPackets:
+        serverPackets = collectedPackets[fileType][0]
+        clientPackets = collectedPackets[fileType][1]
+        thisFileTypeMetrics = {}
+        for serverPacket in serverPackets:
+            for clientPacket in clientPackets:
+                if serverPacket[Raw] == clientPacket[Raw]:
+                    key = str(serverPacket[Raw])
+                    if key in thisFileTypeMetrics:
+                        thisFileTypeMetrics[key]['latency'].append(
+                            serverPacket.time - clientPacket.time)
+                    else:
+                        thisFileTypeMetrics[key] = {
+                            'latency': [serverPacket.time - clientPacket.time]
+                        }
+        metricDictionary[fileType] = thisFileTypeMetrics
+    dumpToFile("pickle/metricDictionary", metricDictionary)
+    analyzeMetrics(metricDictionary)
+
+
+def loadMetricDictionaryFromFile():  # FOR DEVELOPMENT
+    metricDictionary = pickle.load(
+        open("pickle/metricDictionary", 'rb'))
+    analyzeMetrics(metricDictionary)
+
+
+def analyzeMetrics(metricDictionary):
+    for fileType in metricDictionary:
+        numPackets = 0
+        totalLatency = 0
+        totalLatencySq = 0
+        thisFileTypeMetrics = metricDictionary[fileType]
+        for matchedPacket in thisFileTypeMetrics:
+            numPackets += len(thisFileTypeMetrics[matchedPacket]['latency'])
+            for latency in thisFileTypeMetrics[matchedPacket]['latency']:
+                totalLatency += latency
+                totalLatencySq += latency * latency
+        if numPackets>1:
+            jitter = (totalLatencySq - (totalLatency *
+                                        totalLatency / numPackets)) / (numPackets - 1)
+            print(f"Your {fileType} jitter is {jitter*1000} ms")
+            print(f"Your {fileType} average latency is {totalLatency*1000/numPackets} ms")
+        else:
+            print(f"Metrics could not be calculated for {fileType}")
 
 
 # def checkPorts():
     # listPorts = ["80","443"]
     # for p in listPorts:
-        # try
-            # r = requests.get(f'http://portquiz.net:{p}')
-        # except
-            # failedports = []
-
-# startSniff()
-#loadPacketsFromFiles()
+    # try
+    # r = requests.get(f'http://portquiz.net:{p}')
+    # except
+    # failedports = []
+startSniff(["html", "video"])
+# print(gmtime(getTime()))
+# loadPacketsFromFiles()
+# loadMetricDictionaryFromFile()
 
 # main()
