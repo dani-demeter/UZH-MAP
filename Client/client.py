@@ -26,10 +26,10 @@ def main():
     # getBasicIPInfo()
     window = tk.Tk()
     window.geometry("500x500")
-    getIPButton = tk.Button(
-        text="Retrieve IP Info", command=lambda: IPInfoLabel.configure(text=getBasicIPInfo()))
-    getIPButton.pack()
-    IPInfoLabel = tk.Label(text="")
+    getIPButton = tk.Button(window,
+                            text="Retrieve IP Info", command=lambda: IPInfoLabel.configure(text=getBasicIPInfo()))
+    getIPButton.place(x=0, y=0)
+    IPInfoLabel = tk.Label(window, text="")
     IPInfoLabel.pack()
     window.mainloop()
 
@@ -201,11 +201,12 @@ def analyzeMetrics(metricDictionary):
             for latency in thisFileTypeMetrics[matchedPacket]['latency']:
                 totalLatency += latency
                 totalLatencySq += latency * latency
-        if numPackets>1:
+        if numPackets > 1:
             jitter = (totalLatencySq - (totalLatency *
                                         totalLatency / numPackets)) / (numPackets - 1)
             print(f"Your {fileType} jitter is {jitter*1000} ms")
-            print(f"Your {fileType} average latency is {totalLatency*1000/numPackets} ms")
+            print(
+                f"Your {fileType} average latency is {totalLatency*1000/numPackets} ms")
         else:
             print(f"Metrics could not be calculated for {fileType}")
 
@@ -217,9 +218,9 @@ def analyzeMetrics(metricDictionary):
     # r = requests.get(f'http://portquiz.net:{p}')
     # except
     # failedports = []
-startSniff(["html", "video"])
+# startSniff(["html", "video"])
 # print(gmtime(getTime()))
 # loadPacketsFromFiles()
 # loadMetricDictionaryFromFile()
-
-# main()
+# doTraceroute()
+main()
