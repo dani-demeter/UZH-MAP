@@ -21,7 +21,9 @@ def ping():
 class myHandler(BaseHTTPRequestHandler):
     
     def do_GET(self):
-        if self.path == 'ping'
+        print('Got request')
+        print(self.path)
+        if self.path == '/ping':
             result = ping()
             self.send_response(200)
             self.send_header("Content-type", "text/html")
