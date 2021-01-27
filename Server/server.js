@@ -5,7 +5,18 @@ const express = require('express')
 var path = require('path');
 const app = express()
 const port = process.env.PORT || 3000 // for heroku
+const porthttps = 3005
 const { execFile } = require('child_process');
+var fs = require('fs');
+var http = require('http');
+var https = require('https');
+var privateKey  = fs.readFileSync(path.join(__dirname + '/ssl/example.com.key'), 'utf8');
+var certificate = fs.readFileSync(path.join(__dirname + '/ssl/example.com.crt'), 'utf8');
+var credentials = {key: privateKey, cert: certificate};
+
+var httpsServer = https.createServer(credentials, app);
+var httpServer = http.createServer(app);
+
 
 app.get('/HTML', (req, res) => {
     console.log("Sending HTML");
@@ -21,6 +32,7 @@ app.get('/HTML', (req, res) => {
 app.get('/video', (req, res) => {
     console.log("Sending video");
     res.sendFile(path.join(__dirname + '/preview.mp4'));
+	console.log("Finished video");
 })
 
 app.get('/packets', (req, res) => {
@@ -41,8 +53,18 @@ app.get('/startsniff', (req, res) => {
     res.sendStatus(200);
 })
 
+
+app.get('/ping', (req, res) => {
+    console.log("Ping request");
+    res.sendStatus(200);
+})
+
+
+httpsServer.listen(porthttps, () => {
+	console.log(`UZH-MAP HTTPS listening at http://localhost:${porthttps}`)
+})
 app.listen(port, () => {
-    console.log(`UZH-MAP listening at http://localhost:${port}`)
+    console.log(`UZH-MAP HTTP listening at http://localhost:${port}`)
 })
 
 

@@ -19,7 +19,7 @@ def startSniffing():
         print(f'Destination IP is {ip}')
     filename = pathlib.Path(__file__).parent.absolute() / ("sniff" + str(ip).replace(".", "_").replace(":", "-"))
     print("Starting sniffing")
-    packets = sniff(timeout=5, filter=f'dst host {ip}')
+    packets = sniff(timeout=10, filter=f'dst host {ip}')
     print("Finished sniffing")
     dumpToFile(filename, packets)
 
