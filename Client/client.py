@@ -237,6 +237,7 @@ def analyzeMetrics(metricDictionary):
                 totalLatency += latency
                 totalLatencySq += latency * latency
         if numPackets > 1:
+            print(f"Number of packets matched for {fileType} is {numPackets}")
             jitter = (totalLatencySq - (totalLatency *
                                         totalLatency / numPackets)) / (numPackets - 1)
             print(f"Your {fileType} jitter is {jitter*1000} ms")
@@ -374,7 +375,8 @@ def startmain():
 ## 
 # startSniff(["html", "video"])
 # print(gmtime(getTime()))
-# loadPacketsFromFiles()
+loadPacketsFromFiles(["html", "video"])
 # loadMetricDictionaryFromFile()
 # doTraceroute()
 #main()
+
