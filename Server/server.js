@@ -54,6 +54,13 @@ app.get('/startsniff', (req, res) => {
 })
 
 
+app.get('/ping', (req, res) => {
+    console.log("Ping request");
+	res.end()
+    res.sendStatus(200);
+})
+
+
 httpsServer.listen(porthttps, () => {
 	console.log(`UZH-MAP HTTPS listening at http://localhost:${porthttps}`)
 })
