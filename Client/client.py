@@ -13,7 +13,7 @@ from threading import Thread
 import pickle
 
 import urllib
-
+from ftplib import FTP
 # IMPORT ENV VARIABLES
 import env
 
@@ -108,13 +108,17 @@ def dumpToFile(filename, content):
     outfile.close()
 
 
-def cleanPackets(packets):  # removes all ssh files and only shows packets with load
+def cleanPackets(packets,fileType):  # removes all ssh files and only shows packets with load
     res = []
     for packet in packets:
         if TCP in packet:
             if Raw in packet:
-                if packet.sport == 3000:
-                    res.append(packet)
+                if fileType == 'FTP':
+                    if packet.sport != 3000 or 'ssh':
+                        res.append(packet)
+                else:
+                    if packet.sport == 3000:
+                        res.append(packet)
     return res
 
 
@@ -129,27 +133,48 @@ def startSniff(fileTypes):
 
 def scapySniff(fileType):
     print(f"Started {fileType} sniffing on client")
-    packets = sniff(timeout=7, filter=f'tcp and src host {env.serverIP}')
-    print(f"Finished {fileType} sniffing on client")
-    collectPackets(packets, fileType)
+    if fileType == 'video' or 'html':
+        packets = sniff(timeout=15, filter=f'tcp and src host {env.serverIP}')
+        print(f"Finished {fileType} sniffing on client")
+        collectPackets(packets, fileType)
+    else:
+        packets = sniff(timeout=15, filter=f'tcp src host {env.serverIP}')
+        print(f"Finished {fileType} sniffing on client")
+        collectPackets(packets, fileType)
 
 
 def collectPackets(clientPackets, fileType):
     serverPackets = pickle.load(urllib.request.urlopen(
-        "http://" + env.serverIP + ":3000/packets"))
-    serverPackets = cleanPackets(serverPackets)
-    clientPackets = cleanPackets(clientPackets)
+        "http://" + env.serverIP + ":3000/packets"))   
+    serverPackets = cleanPackets(serverPackets,fileType)
+    clientPackets = cleanPackets(clientPackets,fileType)
     dumpToFile("pickle/serverPackets_"+fileType, serverPackets)
     dumpToFile("pickle/clientPackets_"+fileType, clientPackets)
-    # analyzePackets(serverPackets, clientPackets)
+    calculateJitter(serverPackets, clientPackets)
 
 
 def startServerSniffAndSendFile(fileType):
-    print(f"Starting {fileType} sniffing on server")
-    requests.get("http://" + env.serverIP + ":3000/startsniff")
-    time.sleep(1)
-    requests.get("http://" + env.serverIP + ":3000/" + fileType)
+    if fileType == 'FTP':
+        print(f"Starting {fileType} sniffing on server")
+        r = requests.get("http://" + env.serverIP + ":3000/startsniff")
+        time.sleep(1)
+        getFTPfile()
+    else:
+        print(f"Starting {fileType} sniffing on server")
+        requests.get("http://" + env.serverIP + ":3000/startsniff")
+        time.sleep(1)
+        requests.get("http://" + env.serverIP + ":3000/" + fileType)
 
+def getFTPfile():
+    ftp = FTP(f'{env.serverIP}')
+    ftp.login()
+    ftp.cwd('/pub')
+    filename = 'preview.mp4'
+    localfile = open(filename, 'wb')
+    ftp.retrbinary('RETR ' + filename, localfile.write, 1024)
+
+    ftp.quit()
+    localfile.close()
 
 def loadPacketsFromFiles(fileTypes):
     collectedPackets = {}
@@ -159,7 +184,7 @@ def loadPacketsFromFiles(fileTypes):
         clientPackets = pickle.load(
             open("pickle/clientPackets_"+fileType, 'rb'))
         collectedPackets[fileType] = (serverPackets, clientPackets)
-    extractMetrics(collectedPackets)
+    #extractMetrics(collectedPackets)
 
 
 def extractMetrics(collectedPackets):
@@ -209,18 +234,91 @@ def analyzeMetrics(metricDictionary):
                 f"Your {fileType} average latency is {totalLatency*1000/numPackets} ms")
         else:
             print(f"Metrics could not be calculated for {fileType}")
-
-
-# def checkPorts():
-    # listPorts = ["80","443"]
-    # for p in listPorts:
-    # try
-    # r = requests.get(f'http://portquiz.net:{p}')
-    # except
-    # failedports = []
+            
+def calculateTimediff():
+    emptyl = []
+    latencylist = []
+    for i in range(20):
+        time_b = time.time()
+        r= requests.get("http://" + env.serverIP + ":3000/ping")
+        time_a = time.time()
+        latency = time_a - time_b
+        latencylist.append(latency)
+        factor = latency/2
+        numb = r.content.decode()
+        numb = float(numb)
+        difference = (time_b + factor) - numb
+        print(difference)
+        emptyl.append(difference)
+    averageTimeDiff = sum(emptyl) / len(emptyl)
+    averagelatency = (sum(latencylist) / len(latencylist))/2
+    print(average)
+    return averageTimeDiff, averagelatency
+    
+    
+def calculateJitter(serverp,clientp,latency,treshhold = 0):
+    thisFileTypeMetrics = {}
+    lenserver = len(serverp)
+    lenclient = len(clientp)
+    times = serverp[lenserver-1].time - serverp[0].time
+    timec = clientp[lenclient-1].time - clientp[1].time
+    print(timec-times)
+    print(serverp[0][Raw])
+    print(clientp[0][Raw])
+        # get latency of the first packet
+        # calculate jitter
+        # if jitter is higher than 30% of the latency report jitter and add to blockchain
+        
+def checkPorts():
+    listports = [20,21,22,23,25,53,80,110,119,123,143,161,194,443]
+    failed = []
+    worked = []
+    for port in listports:
+        try:
+            r = requests.get(f'http://portquiz.net:{port}',timeout= 1)
+            worked.append(port)
+        except:
+            failed.append(port)
+    print(failed)
+    return failed,worked
+    
+    
+def loadPackets():
+    collectedPackets = {}
+    serverPackets = pickle.load(
+        open("pickle/serverPackets_video", 'rb'))
+    clientPackets = pickle.load(
+        open("pickle/clientPackets_video", 'rb'))
+    print(len(clientPackets))
+    #timediff, latency = calculateTimediff()
+    #print(latency)
+    return serverPackets
+    
+    
+def calculatepacketloss(serverp):
+    i = 0
+    packetloss = 0
+    for p in serverp:
+        for x in range(len(serverp)-(i+1)):
+            if p[TCP].seq == serverp[i+1][TCP].seq:
+                packetloss = packetloss + 1
+                print("found packet duplicate")
+            
+        i = i + 1
+    print(i)
+    return packetloss
+         
+def startmain():
+    timediff, latency = calculateTimediff()
+    #calculateJitter(serverPackets,clientPackets,latency)
+p = loadPackets()
+calculatepacketloss(p)
+#### do latency, port blocking and throughput, then do video on 80 , packetloss , then do on 3000, then do 3000 text
+## once ftp
+## 
 # startSniff(["html", "video"])
 # print(gmtime(getTime()))
 # loadPacketsFromFiles()
 # loadMetricDictionaryFromFile()
 # doTraceroute()
-main()
+#main()

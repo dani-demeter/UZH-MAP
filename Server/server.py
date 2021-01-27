@@ -27,7 +27,7 @@ class myHandler(BaseHTTPRequestHandler):
             result = ping()
             self.send_response(200)
             self.send_header("Content-type", "text/html")
-            self.send_header("Content-length", len(results))
+            self.send_header("Content-length", len(result))
             self.end_headers()
             self.wfile.write(f'{result}'.encode())  
         # ip =  self.path[8:]
