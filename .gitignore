@@ -3,3 +3,7 @@ __pycache__/
 env.py
 Client/clientPacketsByClient
 Client/serverPacketsByClient
+Client/pickle/serverPackets_video
+Client/serverPackets_html
+Client/serverPacketsByClient1
+Server/debug.log
