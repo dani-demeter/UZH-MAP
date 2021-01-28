@@ -11,7 +11,7 @@ import datetime
 # import pyshark
 from threading import Thread
 import pickle
-
+import speedtest
 import urllib
 from ftplib import FTP
 # IMPORT ENV VARIABLES
@@ -122,11 +122,11 @@ def cleanPackets(packets,fileType):  # removes all ssh files and only shows pack
     return res
 
 
-def startSniff(fileTypes):
+def startSniff(fileTypes,port = '80',ftp = 'video'):
     for fileType in fileTypes:
         thread = Thread(target=scapySniff, args=[fileType])
         thread.start()
-        startServerSniffAndSendFile(fileType)
+        startServerSniffAndSendFile(fileType,port,ftp)
         thread.join()
     loadPacketsFromFiles(fileTypes)
 
@@ -138,7 +138,7 @@ def scapySniff(fileType):
         print(f"Finished {fileType} sniffing on client")
         collectPackets(packets, fileType)
     else:
-        packets = sniff(timeout=10, filter=f'tcp src host {env.serverIP}')
+        packets = sniff(timeout=10, filter=f'tcp and src host {env.serverIP}')
         print(f"Finished {fileType} sniffing on client")
         collectPackets(packets, fileType)
 
@@ -153,12 +153,12 @@ def collectPackets(clientPackets, fileType):
     #calculateJitter(serverPackets, clientPackets)
 
 
-def startServerSniffAndSendFile(fileType,port= '80'):
+def startServerSniffAndSendFile(fileType,port,ftp):
     if fileType == 'FTP':
         print(f"Starting {fileType} sniffing on server")
         r = requests.get("http://" + env.serverIP + ":3000/startsniff")
         time.sleep(1)
-        getFTPfile()
+        getFTPfile(ftp)
     elif fileType == 'html':
         print(f"Starting {fileType} sniffing on server")
         requests.get("http://" + env.serverIP + ":3000/startsniff")
@@ -178,11 +178,15 @@ def getFTPfile(fileType):
     ftp.cwd('/pub')
     if fileType == 'video':
         filename = 'preview.mp4'
+        localfile = open(filename, 'wb')
+        ftp.retrbinary('RETR ' + filename, localfile.write, 1024)
+        ftp.retrbinary('RETR ' + filename, localfile.write, 1024)
     elif fileType == 'html':
         filename = 'index.html'
-    localfile = open(filename, 'wb')
-    ftp.retrbinary('RETR ' + filename, localfile.write, 1024)
-
+        localfile = open(filename, 'wb')
+        for i in range(20):
+            ftp.retrbinary('RETR ' + filename, localfile.write, 1024)
+    #delete
     ftp.quit()
     localfile.close()
 
@@ -273,7 +277,7 @@ def calculateJitter(serverp,clientp,latency,treshhold = 0):
     lenclient = len(clientp)
     times = serverp[lenserver-1].time - serverp[0].time
     timec = clientp[lenclient-1].time - clientp[1].time
-    jitter = timec-times
+    jitter = abs(timec-times)
     print(timec-times)
     return jitter/latency
     #print(serverp[0][Raw])
@@ -335,11 +339,15 @@ def calculatethroughput(packets):
     throughput = total/(tottime*100000)
     return throughput
         
- 
+def speedtestdown():
+    s = speedtest.Speedtest()
+    return s.download()/1000000
 
 def starting():
     #latency
     latency = calculatelatency()
+    #throughput speedtest
+    speed = speedtestdown()
     #portblockng
     failed,worked = checkPorts()
     #throughput once video
@@ -354,12 +362,32 @@ def starting():
     client, server = loadPackets('html')
     jitterhtml = calculateJitter(server,client,latency)
     losshtml80 = calculatepacketloss(server)
+    #html 3000
+    startSniff(["video"],port = '3000')
+    client, server = loadPackets('video')
+    jittervideo3 = calculateJitter(server,client,latency)
+    losshtml3000 = calculatepacketloss(server)
+    # ftp
+    startSniff(["FTP"],ftp ='video')
+    client, server = loadPackets('FTP')
+    jittervideoftp = calculateJitter(server,client,latency)
+    lossftp = calculatepacketloss(server)
+    
+    startSniff(["FTP"],ftp ='html')
+    client, server = loadPackets('FTP')
+    jittervideoftp = calculateJitter(server,client,latency)
+    lossftp = calculatepacketloss(server)
     print(f'latency is {latency}')
     print(f'thorughput os {throughput}')
+    print(f'speedtest throughput is {speed}')
     print(f'jitter video 80 is {jitter}')
     print(f'jitter html 80 is {jitterhtml}')
     print(f'loss video 80 is {lossvideo80}')
     print(f'loss html 80 is {losshtml80}')
+    print(f'jitter video 3000 is {jittervideo3}')
+    print(f'loss video 3000 is {losshtml3000}')
+    print(f'jitter ftp is {jittervideoftp}')
+    print(f'loss video ftp is {lossftp}')
     
     
     
