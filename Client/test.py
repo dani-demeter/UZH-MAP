@@ -1,25 +1,17 @@
-# import client
-from scapy.all import *
-import pickle
-s = pickle.load(open("serverPacketsByClient", 'rb'))
-c = pickle.load(open("clientPacketsByClient", 'rb'))
+import time
+import sys
+from ast import literal_eval as make_tuple
 
+ports2Check = list(make_tuple(sys.argv[1]))
+ports2Check = map(lambda x: int(x), ports2Check)
 
-def cleaner(packets):  # removes all ssh files and only shows packets with load
-    l = []
-    for p in packets:
-        if TCP in p:
-            if Raw in p:
-                if p.sport == 3000:
-                    l.append(p)
-    return l
+# for port in ports2Check:
+#     print(port)
+#     sys.stdout.flush()
+#     time.sleep(0.1)
 
-
-s = cleaner(s)
-c = cleaner(c)
-# use s[1][Raw] to compare
-print(type(s[0][Raw]))
-print()
-print(type(c[1][Raw]))
-print()
-print(s[0][Raw].payload == c[1][Raw].payload)
+for i in range(10):
+    print("HELLO %d.%d" % divmod(i, 10))
+    print('('+str(i)+'/10)')
+    sys.stdout.flush()
+    time.sleep(0.1)

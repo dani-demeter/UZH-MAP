@@ -16,6 +16,8 @@ import urllib
 from ftplib import FTP
 # IMPORT ENV VARIABLES
 import env
+import sys
+from ast import literal_eval as make_tuple
 
 
 myIP = ""
@@ -26,11 +28,14 @@ def main():
     # getBasicIPInfo()
     window = tk.Tk()
     window.geometry("500x500")
-    getIPButton = tk.Button(window,
-                            text="Retrieve IP Info", command=lambda: IPInfoLabel.configure(text=getBasicIPInfo()))
-    getIPButton.place(x=0, y=0)
-    IPInfoLabel = tk.Label(window, text="")
-    IPInfoLabel.pack()
+    startButton = tk.Button(window, text="Start measurements")
+    startButton['command'] = starting
+    # getIPButton = tk.Button(window,
+    #                         text="Retrieve IP Info", command=lambda: IPInfoLabel.configure(text=getBasicIPInfo()))
+    # getIPButton.place(x=0, y=0)
+    # IPInfoLabel = tk.Label(window, text="")
+    # IPInfoLabel.pack()
+    startButton.pack()
     window.mainloop()
 
 
@@ -108,7 +113,7 @@ def dumpToFile(filename, content):
     outfile.close()
 
 
-def cleanPackets(packets,fileType):  # removes all ssh files and only shows packets with load
+def cleanPackets(packets, fileType):  # removes all ssh files and only shows packets with load
     res = []
     for packet in packets:
         if TCP in packet:
@@ -122,11 +127,11 @@ def cleanPackets(packets,fileType):  # removes all ssh files and only shows pack
     return res
 
 
-def startSniff(fileTypes,port = '80',ftp = 'video'):
+def startSniff(fileTypes, port='80', ftp='video'):
     for fileType in fileTypes:
         thread = Thread(target=scapySniff, args=[fileType])
         thread.start()
-        startServerSniffAndSendFile(fileType,port,ftp)
+        startServerSniffAndSendFile(fileType, port, ftp)
         thread.join()
     loadPacketsFromFiles(fileTypes)
 
@@ -145,15 +150,15 @@ def scapySniff(fileType):
 
 def collectPackets(clientPackets, fileType):
     serverPackets = pickle.load(urllib.request.urlopen(
-        "http://" + env.serverIP + ":3000/packets"))   
-    serverPackets = cleanPackets(serverPackets,fileType)
-    clientPackets = cleanPackets(clientPackets,fileType)
+        "http://" + env.serverIP + ":3000/packets"))
+    serverPackets = cleanPackets(serverPackets, fileType)
+    clientPackets = cleanPackets(clientPackets, fileType)
     dumpToFile("pickle/serverPackets_"+fileType, serverPackets)
     dumpToFile("pickle/clientPackets_"+fileType, clientPackets)
     #calculateJitter(serverPackets, clientPackets)
 
 
-def startServerSniffAndSendFile(fileType,port,ftp):
+def startServerSniffAndSendFile(fileType, port, ftp):
     if fileType == 'FTP':
         print(f"Starting {fileType} sniffing on server")
         r = requests.get("http://" + env.serverIP + ":3000/startsniff")
@@ -164,13 +169,15 @@ def startServerSniffAndSendFile(fileType,port,ftp):
         requests.get("http://" + env.serverIP + ":3000/startsniff")
         time.sleep(1)
         for i in range(20):
-            requests.get("http://" + env.serverIP + ":" + port +"/" + fileType)
+            requests.get("http://" + env.serverIP +
+                         ":" + port + "/" + fileType)
     else:
         print(f"Starting {fileType} sniffing on server")
         requests.get("http://" + env.serverIP + ":3000/startsniff")
         time.sleep(1)
-        requests.get("http://" + env.serverIP + ":" + port +"/" + fileType)
+        requests.get("http://" + env.serverIP + ":" + port + "/" + fileType)
         requests.get("http://" + env.serverIP + ":80/" + fileType)
+
 
 def getFTPfile(fileType):
     ftp = FTP(f'{env.serverIP}')
@@ -186,9 +193,10 @@ def getFTPfile(fileType):
         localfile = open(filename, 'wb')
         for i in range(20):
             ftp.retrbinary('RETR ' + filename, localfile.write, 1024)
-    #delete
+    # delete
     ftp.quit()
     localfile.close()
+
 
 def loadPacketsFromFiles(fileTypes):
     collectedPackets = {}
@@ -198,7 +206,7 @@ def loadPacketsFromFiles(fileTypes):
         clientPackets = pickle.load(
             open("pickle/clientPackets_"+fileType, 'rb'))
         collectedPackets[fileType] = (serverPackets, clientPackets)
-    #extractMetrics(collectedPackets)
+    # extractMetrics(collectedPackets)
 
 
 def extractMetrics(collectedPackets):
@@ -249,13 +257,14 @@ def analyzeMetrics(metricDictionary):
                 f"Your {fileType} average latency is {totalLatency*1000/numPackets} ms")
         else:
             print(f"Metrics could not be calculated for {fileType}")
-            
+
+
 def calculatelatency():
     emptyl = []
     latencylist = []
     for i in range(20):
         time_b = time.time()
-        r= requests.get("http://" + env.serverIP + ":3000/ping")
+        r = requests.get("http://" + env.serverIP + ":3000/ping")
         time_a = time.time()
         latency = time_a - time_b
         latencylist.append(latency)
@@ -263,15 +272,15 @@ def calculatelatency():
         #numb = r.content.decode()
         #numb = float(numb)
         #difference = (time_b + factor) - numb
-        #print(difference)
-        #emptyl.append(difference)
+        # print(difference)
+        # emptyl.append(difference)
     #averageTimeDiff = sum(emptyl) / len(emptyl)
     averagelatency = (sum(latencylist) / len(latencylist))/2
     print(averagelatency)
     return averagelatency
-    
-    
-def calculateJitter(serverp,clientp,latency,treshhold = 0):
+
+
+def calculateJitter(serverp, clientp, latency, treshhold=0):
     thisFileTypeMetrics = {}
     lenserver = len(serverp)
     lenclient = len(clientp)
@@ -280,42 +289,44 @@ def calculateJitter(serverp,clientp,latency,treshhold = 0):
     jitter = abs(timec-times)
     print(timec-times)
     return jitter/latency
-    #print(serverp[0][Raw])
-    #print(clientp[0][Raw])
-    
-        # get latency of the first packet
-        # calculate jitter
-        # if jitter is higher than 30% of the latency report jitter and add to blockchain
-        
-def checkPorts(newlist = []):
+    # print(serverp[0][Raw])
+    # print(clientp[0][Raw])
+
+    # get latency of the first packet
+    # calculate jitter
+    # if jitter is higher than 30% of the latency report jitter and add to blockchain
+
+
+def checkPorts(newlist=[]):
     if newlist == []:
-        listports = [20,21,22,23,25,53,80,110,119,123,143,161,194,443]
+        listports = [20, 21, 22, 23, 25, 53, 80,
+                     110, 119, 123, 143, 161, 194, 443]
     else:
         listports = newlist
     failed = []
     worked = []
     for port in listports:
         try:
-            r = requests.get(f'http://portquiz.net:{port}',timeout= 1)
+            r = requests.get(f'http://portquiz.net:{port}', timeout=1)
             worked.append(port)
         except:
             failed.append(port)
     print(failed)
-    return failed,worked
-    
-    
+    return failed, worked
+
+
 def loadPackets(part):
     collectedPackets = {}
     serverPackets = pickle.load(
-        open("pickle/serverPackets_"+ part, 'rb'))
+        open("pickle/serverPackets_" + part, 'rb'))
     clientPackets = pickle.load(
-        open("pickle/clientPackets_"+ part, 'rb'))
+        open("pickle/clientPackets_" + part, 'rb'))
     print(len(clientPackets))
     #timediff, latency = calculateTimediff()
-    #print(latency)
-    return clientPackets,serverPackets
-    
-    
+    # print(latency)
+    return clientPackets, serverPackets
+
+
 def calculatepacketloss(serverp):
     i = 1
     packetloss = 0
@@ -338,73 +349,113 @@ def calculatethroughput(packets):
         total = total + p[IP].len
     throughput = total/(tottime*100000)
     return throughput
-        
+
+
 def speedtestdown():
     s = speedtest.Speedtest()
     return s.download()/1000000
 
-def starting():
-    #latency
+
+def starting(ports2check):
+    numberOfSteps = 8
+    # latency
+    print('Starting latency calculation')
+
+    sys.stdout.flush()
     latency = calculatelatency()
-    #throughput speedtest
+    print('(1/'+str(numberOfSteps)+')')
+    # throughput speedtest
+    print('Starting speedtest')
+    sys.stdout.flush()
     speed = speedtestdown()
-    #portblockng
-    failed,worked = checkPorts()
-    #throughput once video
+    print('(2/'+str(numberOfSteps)+')')
+    # portblockng
+    print('Starting port blocking')
+    sys.stdout.flush()
+    failed, worked = checkPorts(ports2check)
+    print('(3/'+str(numberOfSteps)+')')
+    # throughput once video
+    print('Starting video throughput calculation')
+    sys.stdout.flush()
     startSniff(["video"])
     client, server = loadPackets('video')
     throughput = calculatethroughput(client)
-    #jitter 80 video
+    print('(4/'+str(numberOfSteps)+')')
+    # jitter 80 video
+    print('Starting video jitter calculation on port 80')
+    sys.stdout.flush()
     lossvideo80 = calculatepacketloss(server)
-    jitter = calculateJitter(server,client,latency)
+    jitter = calculateJitter(server, client, latency)
+    print('(5/'+str(numberOfSteps)+')')
     # html
+    print('Starting html calculation')
+    sys.stdout.flush()
     startSniff(["html"])
     client, server = loadPackets('html')
-    jitterhtml = calculateJitter(server,client,latency)
+    jitterhtml = calculateJitter(server, client, latency)
     losshtml80 = calculatepacketloss(server)
-    #html 3000
-    startSniff(["video"],port = '3000')
+    print('(6/'+str(numberOfSteps)+')')
+    # html 3000
+    print('Starting video calculation on port 3000')
+    sys.stdout.flush()
+    startSniff(["video"], port='3000')
     client, server = loadPackets('video')
-    jittervideo3 = calculateJitter(server,client,latency)
+    jittervideo3 = calculateJitter(server, client, latency)
     losshtml3000 = calculatepacketloss(server)
+    print('(7/'+str(numberOfSteps)+')')
     # ftp
-    startSniff(["FTP"],ftp ='video')
+    print('Starting FTP')
+    sys.stdout.flush()
+    startSniff(["FTP"], ftp='video')
     client, server = loadPackets('FTP')
-    jittervideoftp = calculateJitter(server,client,latency)
+    jittervideoftp = calculateJitter(server, client, latency)
     lossftp = calculatepacketloss(server)
-    
-    startSniff(["FTP"],ftp ='html')
+
+    startSniff(["FTP"], ftp='html')
     client, server = loadPackets('FTP')
-    jittervideoftp = calculateJitter(server,client,latency)
+    jittervideoftp = calculateJitter(server, client, latency)
     lossftp = calculatepacketloss(server)
+    print('(8/'+str(numberOfSteps)+')')
+
     print(f'latency is {latency}')
+    sys.stdout.flush()
     print(f'thorughput os {throughput}')
+    sys.stdout.flush()
     print(f'speedtest throughput is {speed}')
+    sys.stdout.flush()
     print(f'jitter video 80 is {jitter}')
+    sys.stdout.flush()
     print(f'jitter html 80 is {jitterhtml}')
+    sys.stdout.flush()
     print(f'loss video 80 is {lossvideo80}')
+    sys.stdout.flush()
     print(f'loss html 80 is {losshtml80}')
+    sys.stdout.flush()
     print(f'jitter video 3000 is {jittervideo3}')
+    sys.stdout.flush()
     print(f'loss video 3000 is {losshtml3000}')
+    sys.stdout.flush()
     print(f'jitter ftp is {jittervideoftp}')
+    sys.stdout.flush()
     print(f'loss video ftp is {lossftp}')
-    
-    
-    
-    
-        
+    sys.stdout.flush()
+
+
 def startmain():
     timediff, latency = calculateTimediff()
-    #calculateJitter(serverPackets,clientPackets,latency)
+
+
+    # calculateJitter(serverPackets,clientPackets,latency)
 #p = loadPackets()
-#calculatepacketloss(p)
-#### do latency, port blocking and throughput, then do video on 80 , packetloss , then do on 3000, then do 3000 text
-## once ftp
-## 
+# calculatepacketloss(p)
+# do latency, port blocking and throughput, then do video on 80 , packetloss , then do on 3000, then do 3000 text
+# once ftp
+##
 # startSniff(["html", "video"])
 # print(gmtime(getTime()))
-loadPacketsFromFiles(["html", "video"])
+# loadPacketsFromFiles(["html", "video"])
 # loadMetricDictionaryFromFile()
 # doTraceroute()
-#main()
-
+ports2check = list(make_tuple(sys.argv[1]))
+ports2check = map(lambda x: int(x), ports2check)
+starting(ports2check)
