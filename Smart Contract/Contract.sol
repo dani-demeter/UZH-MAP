@@ -94,8 +94,10 @@ contract TestContract
     }
     
     //bounty types: ISP, d2s, ping
-    function placeBounty(uint256 valuePerBounty, uint16 numRepeats, string bType, bytes32 bReq) external payable{
-        require(msg.value==valuePerBounty*numRepeats);
+    function placeBounty(uint256 valuePerBounty, uint16 numRepeats, string bType, bytes32 bReq) external payable returns (bool){
+        if(msg.value!=valuePerBounty*numRepeats){
+            return false;
+        }
         if(!addressHasBounties[msg.sender] || bounties[msg.sender][block.timestamp].repeats==0){
             numberOfBounties += 1;
             addressHasBounties[msg.sender] = true;
@@ -103,6 +105,12 @@ contract TestContract
             bountyAddressTimestamps[msg.sender].push(block.timestamp);
         }
         bounties[msg.sender][block.timestamp] = Bounty({repeats:numRepeats, bountyType:bType, bountyReq:bReq, bountyValue:msg.value});
+        return true;
+        
+    }
+    
+    function createNewBounty(uint256 valuePerBounty, uint16 numRepeats, string bType, bytes32 bReq) internal returns (Bounty){
+        return Bounty({repeats:numRepeats, bountyType:bType, bountyReq:bReq, bountyValue:msg.value});
     }
     
     function getQualifiedBounties(int64 d2s, int256 png, bytes32 isp, string[] hops2server) public view returns(address[], uint256[]){
