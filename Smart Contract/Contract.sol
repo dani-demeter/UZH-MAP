@@ -1,9 +1,7 @@
-// Solidity program to demonstrate  
 pragma solidity ^0.4.26; 
 pragma experimental ABIEncoderV2;
   
-// Creating a contract 
-contract TestContract   
+contract UZMAPContract   
 { 
     struct MeasurementResult {
         int64 dist2server;
@@ -20,12 +18,18 @@ contract TestContract
         bytes32 bountyReq;
     }
     
+    struct AddressAndIndex {
+        address addr;
+        uint index;
+    }
+    
     
     mapping(address => MeasurementResult[]) measurementResults;
     address[] addressesWithMeasurements;
     uint256 numberOfMeasurements = 0;
     
     mapping(address => mapping(uint => Bounty)) bounties;
+    mapping(address => mapping(uint => AddressAndIndex[])) bountyMeasurements;
     mapping(address => bool) addressHasBounties;
     address[] addressesWithBounties;
     mapping(address => uint[]) bountyAddressTimestamps;
@@ -109,10 +113,6 @@ contract TestContract
         
     }
     
-    function createNewBounty(uint256 valuePerBounty, uint16 numRepeats, string bType, bytes32 bReq) internal returns (Bounty){
-        return Bounty({repeats:numRepeats, bountyType:bType, bountyReq:bReq, bountyValue:msg.value});
-    }
-    
     function getQualifiedBounties(int64 d2s, int256 png, bytes32 isp, string[] hops2server) public view returns(address[], uint256[]){
         address[] memory resAddressesFull = new address[](numberOfBounties);
         uint256[] memory resIndexesFull = new uint256[](numberOfBounties);
@@ -157,4 +157,85 @@ contract TestContract
         return bounties[addr][timest];
     }
     
+    function claimBounty(address bountyAddr, uint timest) external returns (bool){
+        bool addrHasMeasurements = false;
+        for (uint i=0; i<addressesWithMeasurements.length; i++) {
+            if(addressesWithMeasurements[i] == msg.sender){
+                addrHasMeasurements = true;
+                break;
+            }
+        }
+        if(!addrHasMeasurements) return false;
+        if(!addressHasBounties[bountyAddr]) return false;
+        bool bountyExists = false;
+        uint timestIndex;
+        for(uint j = 0; j<bountyAddressTimestamps[bountyAddr].length; j++){
+            if(bountyAddressTimestamps[bountyAddr][j] == timest){
+                bountyExists = true;
+                timestIndex = j;
+                break;
+            }
+        }
+        if(!bountyExists) return false;
+        
+        MeasurementResult memory lastMeasurement = measurementResults[msg.sender][measurementResults[msg.sender].length-1];
+        bool validClaim = false;
+        bytes32 typeOfBountyHash = keccak256(abi.encodePacked(bounties[bountyAddr][timest].bountyType));
+        bytes32 bountyReqHash = keccak256(abi.encodePacked(bounties[bountyAddr][timest].bountyReq));
+        if(typeOfBountyHash == keccak256(abi.encodePacked("ISP")) && bountyReqHash == keccak256(abi.encodePacked(lastMeasurement.ISP))){
+            validClaim = true;
+        }else if(typeOfBountyHash == keccak256(abi.encodePacked("d2s")) 
+                    && int(bounties[bountyAddr][timest].bountyReq)-100 <= lastMeasurement.dist2server 
+                    && int(bounties[bountyAddr][timest].bountyReq)+100 >= lastMeasurement.dist2server){
+            validClaim = true;
+        }else if(typeOfBountyHash == keccak256(abi.encodePacked("ping")) 
+                    && int(bounties[bountyAddr][timest].bountyReq)-10 <= lastMeasurement.ping 
+                    && int(bounties[bountyAddr][timest].bountyReq)+10 >= lastMeasurement.ping){
+            validClaim = true;
+        }
+        if(validClaim){
+            retireBounty(bountyAddr, timest, timestIndex);
+            msg.sender.transfer(bounties[bountyAddr][timest].bountyValue);
+            return true;
+        }
+    }
+    
+    function retireBounty(address bountyAddr, uint timest, uint timestIndex) internal{
+        bountyMeasurements[bountyAddr][timest].push(AddressAndIndex({addr: msg.sender, index: measurementResults[msg.sender].length-1}));
+            bounties[bountyAddr][timest].repeats--;
+            if(bounties[bountyAddr][timest].repeats <= 0){
+                numberOfBounties--;
+                
+                //remove timestamp from bounty address' list
+                for (uint l = timestIndex; l<bountyAddressTimestamps[bountyAddr].length-1; l++){
+                    bountyAddressTimestamps[bountyAddr][l] = bountyAddressTimestamps[bountyAddr][l+1];
+                }
+                delete bountyAddressTimestamps[bountyAddr][bountyAddressTimestamps[bountyAddr].length-1];
+                bountyAddressTimestamps[bountyAddr].length--;
+                
+                //remove bounty declaration at timestamp
+                delete bounties[bountyAddr][timest];
+                
+                //check if address has any other bounties
+                if(bountyAddressTimestamps[bountyAddr].length == 0){
+                    
+                    //remove address from bounty timestamp list altogether
+                    delete bountyAddressTimestamps[bountyAddr];
+                    
+                    //mark address as not having any bounties
+                    addressHasBounties[bountyAddr] = false;
+                    
+                    //remove address from list bounty addresses list
+                    bool pastAddress = false;
+                    for(uint m = 0; m<addressesWithBounties.length-1; m++){
+                        if(addressesWithBounties[m] == bountyAddr) pastAddress = true;
+                        if(pastAddress){
+                            addressesWithBounties[m] = addressesWithBounties[m+1];
+                        }
+                    }
+                    delete addressesWithBounties[addressesWithBounties.length-1];
+                    addressesWithBounties.length--;
+                }
+            }
+    }
 } 
