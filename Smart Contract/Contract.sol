@@ -7,8 +7,7 @@ contract UZMAPContract
         int64 dist2server;
         int256 ping;
         string ISP;
-        string[] hops;
-        mapping(string => mapping(string => int256)) collectedMetrics;
+        mapping(bytes32 => mapping(bytes32 => int256)) collectedMetrics;
     }
     
     struct Bounty {
@@ -35,18 +34,57 @@ contract UZMAPContract
     mapping(address => uint[]) bountyAddressTimestamps;
     uint256 numberOfBounties = 0;
     
-    function addNewTestDescriptors(int64 d2s, int256 png, string isp, string[] hops2server) public returns(uint256){
+    //CONSTANTS
+    bytes32[] acceptedMediaTypes = [keccak256(abi.encodePacked("video")), keccak256(abi.encodePacked("audio")), keccak256(abi.encodePacked("html"))];
+    bytes32[] acceptedMetricTypes = [keccak256(abi.encodePacked("avgLatency")), keccak256(abi.encodePacked("avgJitter"))]; //ADD MORE
+    
+    
+    function getMeasurementResults(address addr, uint index) public view returns (int64, int256, string, int256[]){
+        int256[] memory measurements = new int256[](acceptedMediaTypes.length * acceptedMetricTypes.length);
+        uint counter = 0;
+        for(uint i = 0; i<acceptedMediaTypes.length; i++){
+            for(uint j = 0; j<acceptedMetricTypes.length; j++){
+                int256 measurement = measurementResults[addr][index].collectedMetrics[acceptedMediaTypes[i]][acceptedMetricTypes[j]];
+                measurements[counter] = measurement;
+                counter++;
+            }
+        }
+        return (measurementResults[addr][index].dist2server, measurementResults[addr][index].ping, measurementResults[addr][index].ISP, measurements);
+    }
+    
+    function addNewTestDescriptors(int64 d2s, int256 png, string isp) public returns(uint256){
         if(measurementResults[msg.sender].length == 0){
             addressesWithMeasurements.push(msg.sender);
         }
-        measurementResults[msg.sender].push(MeasurementResult({dist2server:d2s, ping:png, ISP: isp, hops: hops2server}));
+        measurementResults[msg.sender].push(MeasurementResult({dist2server:d2s, ping:png, ISP: isp}));
         numberOfMeasurements++;
         return measurementResults[msg.sender].length;
     }
     
+    function checkMeasurementTypes(string mediaType, string metricType) internal view returns (bool){
+        bool mediaTypeChecksOut = false;
+        for(uint i = 0; i<acceptedMediaTypes.length; i++){
+            if(acceptedMediaTypes[i] == keccak256(abi.encodePacked(mediaType))){
+                mediaTypeChecksOut = true;
+                break;
+            }
+        }
+        if(!mediaTypeChecksOut) return false;
+        
+        bool metricTypeChecksOut = false;
+        for(uint j = 0; j<acceptedMetricTypes.length; j++){
+            if(acceptedMetricTypes[j] == keccak256(abi.encodePacked(metricType))){
+                metricTypeChecksOut = true;
+                break;
+            }
+        }
+        return metricTypeChecksOut;
+    }
+    
     function addNewMeasurement(string mediaType, string metricType, int256 measurementValue) public returns(uint256){
         require(measurementResults[msg.sender].length > 0);
-        measurementResults[msg.sender][measurementResults[msg.sender].length - 1].collectedMetrics[mediaType][metricType] = measurementValue;
+        require(checkMeasurementTypes(mediaType, metricType));
+        measurementResults[msg.sender][measurementResults[msg.sender].length - 1].collectedMetrics[keccak256(abi.encodePacked(mediaType))][keccak256(abi.encodePacked(metricType))] = measurementValue;
         return 0;
     }
     
@@ -113,7 +151,7 @@ contract UZMAPContract
         
     }
     
-    function getQualifiedBounties(int64 d2s, int256 png, bytes32 isp, string[] hops2server) public view returns(address[], uint256[]){
+    function getQualifiedBounties(int64 d2s, int256 png, bytes32 isp) public view returns(address[], uint256[]){
         address[] memory resAddressesFull = new address[](numberOfBounties);
         uint256[] memory resIndexesFull = new uint256[](numberOfBounties);
         
@@ -194,48 +232,58 @@ contract UZMAPContract
             validClaim = true;
         }
         if(validClaim){
-            retireBounty(bountyAddr, timest, timestIndex);
+            fulfillBounty(bountyAddr, timest, timestIndex);
             msg.sender.transfer(bounties[bountyAddr][timest].bountyValue);
             return true;
         }
     }
     
-    function retireBounty(address bountyAddr, uint timest, uint timestIndex) internal{
+    function fulfillBounty(address bountyAddr, uint timest, uint timestIndex) internal{
         bountyMeasurements[bountyAddr][timest].push(AddressAndIndex({addr: msg.sender, index: measurementResults[msg.sender].length-1}));
-            bounties[bountyAddr][timest].repeats--;
-            if(bounties[bountyAddr][timest].repeats <= 0){
-                numberOfBounties--;
-                
-                //remove timestamp from bounty address' list
-                for (uint l = timestIndex; l<bountyAddressTimestamps[bountyAddr].length-1; l++){
-                    bountyAddressTimestamps[bountyAddr][l] = bountyAddressTimestamps[bountyAddr][l+1];
-                }
-                delete bountyAddressTimestamps[bountyAddr][bountyAddressTimestamps[bountyAddr].length-1];
-                bountyAddressTimestamps[bountyAddr].length--;
-                
-                //remove bounty declaration at timestamp
-                delete bounties[bountyAddr][timest];
-                
-                //check if address has any other bounties
-                if(bountyAddressTimestamps[bountyAddr].length == 0){
-                    
-                    //remove address from bounty timestamp list altogether
-                    delete bountyAddressTimestamps[bountyAddr];
-                    
-                    //mark address as not having any bounties
-                    addressHasBounties[bountyAddr] = false;
-                    
-                    //remove address from list bounty addresses list
-                    bool pastAddress = false;
-                    for(uint m = 0; m<addressesWithBounties.length-1; m++){
-                        if(addressesWithBounties[m] == bountyAddr) pastAddress = true;
-                        if(pastAddress){
-                            addressesWithBounties[m] = addressesWithBounties[m+1];
-                        }
-                    }
-                    delete addressesWithBounties[addressesWithBounties.length-1];
-                    addressesWithBounties.length--;
-                }
+        bounties[bountyAddr][timest].repeats--;
+        if(bounties[bountyAddr][timest].repeats <= 0){
+            numberOfBounties--;
+            
+            //remove timestamp from bounty address' list
+            for (uint l = timestIndex; l<bountyAddressTimestamps[bountyAddr].length-1; l++){
+                bountyAddressTimestamps[bountyAddr][l] = bountyAddressTimestamps[bountyAddr][l+1];
             }
+            delete bountyAddressTimestamps[bountyAddr][bountyAddressTimestamps[bountyAddr].length-1];
+            bountyAddressTimestamps[bountyAddr].length--;
+            
+            //remove bounty declaration at timestamp
+            delete bounties[bountyAddr][timest];
+            
+            //check if address has any other bounties
+            if(bountyAddressTimestamps[bountyAddr].length == 0){
+                
+                //remove address from bounty timestamp list altogether
+                delete bountyAddressTimestamps[bountyAddr];
+                
+                //mark address as not having any bounties
+                addressHasBounties[bountyAddr] = false;
+                
+                //remove address from list bounty addresses list
+                bool pastAddress = false;
+                for(uint m = 0; m<addressesWithBounties.length-1; m++){
+                    if(addressesWithBounties[m] == bountyAddr) pastAddress = true;
+                    if(pastAddress){
+                        addressesWithBounties[m] = addressesWithBounties[m+1];
+                    }
+                }
+                delete addressesWithBounties[addressesWithBounties.length-1];
+                addressesWithBounties.length--;
+            }
+        }
+    }
+    
+    function getRetiredBountyMeasurements(address bountyAddr, uint timest) public view returns(address[], uint256[]){
+        address[] memory resAddresses = new address[](bountyMeasurements[bountyAddr][timest].length);
+        uint256[] memory resIndexes = new uint256[](bountyMeasurements[bountyAddr][timest].length);
+        for(uint i = 0; i<bountyMeasurements[bountyAddr][timest].length; i++){
+            resAddresses[i] = bountyMeasurements[bountyAddr][timest][i].addr;
+            resIndexes[i] = bountyMeasurements[bountyAddr][timest][i].index;
+        }
+        return (resAddresses, resIndexes);
     }
 } 

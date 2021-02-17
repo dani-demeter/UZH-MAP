@@ -11,6 +11,7 @@ from threading import Thread
 import subprocess
 import os
 from ast import literal_eval as make_tuple
+import json
 
 try:
     import Tkinter as tk
@@ -210,22 +211,24 @@ class MAPGUI:
                 # self.quit()
                 return
             else:
-                incomingMessage = line.decode("utf-8")
-                if incomingMessage.startswith('('):
-                    separatedMessage = incomingMessage[1:-3].split('/')
-                    separatedMessage = list(
-                        map(lambda x: int(x), separatedMessage))
-                    progressbar = "["+separatedMessage[0]*"==" + \
-                        (separatedMessage[1]-separatedMessage[0]-1)*"  "+"]"
-                    print(progressbar)
-                    print(separatedMessage)
+                incomingMessage = json.loads(line.decode("utf-8"))
+                if incomingMessage['tag'] == 'progress':
+                    progressbar = "[" + incomingMessage['completed']*"==" + (
+                        incomingMessage['total'] - incomingMessage['completed'] - 1)*"  " + "]"
+                    # separatedMessage = incomingMessage[1:-3].split('/')
+                    # separatedMessage = list(
+                    #     map(lambda x: int(x), separatedMessage))
+                    # progressbar = "["+separatedMessage[0]*"==" + \
+                    #     (separatedMessage[1]-separatedMessage[0]-1)*"  "+"]"
+                    # print(progressbar)
+                    # print(separatedMessage)
                     self.progressLabel['text'] = progressbar
-                else:
+                elif incomingMessage['tag'] == 'log':
                     if self.logLabel['text'].count('\n') >= 4:
                         firstLineEnd = self.logLabel['text'].find('\n')
                         self.logLabel['text'] = self.logLabel['text'][firstLineEnd+1:]
                     self.logLabel['text'] += '\n' + \
-                        incomingMessage[:-1]  # update GUI
+                        incomingMessage['message']  # update GUI
                 break  # display no more than one line per 40 milliseconds
         self.root.after(40, self.update, q)  # schedule next update
 
