@@ -35,8 +35,17 @@ contract UZMAPContract
     uint256 numberOfBounties = 0;
     
     //CONSTANTS
-    bytes32[] acceptedMediaTypes = [keccak256(abi.encodePacked("video")), keccak256(abi.encodePacked("audio")), keccak256(abi.encodePacked("html"))];
-    bytes32[] acceptedMetricTypes = [keccak256(abi.encodePacked("avgLatency")), keccak256(abi.encodePacked("avgJitter"))]; //ADD MORE
+    bytes32[] acceptedMediaTypes = [keccak256(abi.encodePacked("generic")), 
+                                    keccak256(abi.encodePacked("video80")), 
+                                    keccak256(abi.encodePacked("html80")),
+                                    keccak256(abi.encodePacked("video3000")),
+                                    keccak256(abi.encodePacked("html3000")),
+                                    keccak256(abi.encodePacked("ftp"))];
+                                    
+    bytes32[] acceptedMetricTypes = [keccak256(abi.encodePacked("osThroughput")), 
+                                     keccak256(abi.encodePacked("speedtestThroughput")), 
+                                     keccak256(abi.encodePacked("avgJitter")),
+                                     keccak256(abi.encodePacked("packetLoss"))];
     
     
     function getMeasurementResults(address addr, uint index) public view returns (int64, int256, string, int256[]){
@@ -81,7 +90,7 @@ contract UZMAPContract
         return metricTypeChecksOut;
     }
     
-    function addNewMeasurement(string mediaType, string metricType, int256 measurementValue) public returns(uint256){
+    function addNewMeasurement(string mediaType, string metricType, int256 measurementValue) public payable returns(uint256){
         require(measurementResults[msg.sender].length > 0);
         require(checkMeasurementTypes(mediaType, metricType));
         measurementResults[msg.sender][measurementResults[msg.sender].length - 1].collectedMetrics[keccak256(abi.encodePacked(mediaType))][keccak256(abi.encodePacked(metricType))] = measurementValue;
@@ -135,6 +144,30 @@ contract UZMAPContract
         return (resAddresses, resIndexes);
     }
     
+    function filterMeasurementsByDistance(int256 targetDistance) public view returns (address[], uint256[]){
+        address[] memory resAddressesFull = new address[](numberOfMeasurements);
+        uint256[] memory resIndexesFull = new uint256[](numberOfMeasurements);
+        int256 lowerBound = targetDistance - 100;
+        int256 upperBound = targetDistance + 100;
+        uint256 counter = 0;
+        for (uint i=0; i<addressesWithMeasurements.length; i++) {
+            for(uint j = 0; j<measurementResults[addressesWithMeasurements[i]].length; j++){
+                if(lowerBound <= measurementResults[addressesWithMeasurements[i]][j].dist2server && measurementResults[addressesWithMeasurements[i]][j].dist2server <= upperBound){
+                    resAddressesFull[counter] = addressesWithMeasurements[i];
+                    resIndexesFull[counter] = j;
+                    counter += 1;
+                }
+            }
+        }
+        address[] memory resAddresses = new address[](counter);
+        uint256[] memory resIndexes = new uint256[](counter);
+        for(uint k = 0; k<counter; k++){
+            resAddresses[k] = resAddressesFull[k];
+            resIndexes[k] = resIndexesFull[k];
+        }
+        return (resAddresses, resIndexes);
+    }
+    
     //bounty types: ISP, d2s, ping
     function placeBounty(uint256 valuePerBounty, uint16 numRepeats, string bType, bytes32 bReq) external payable returns (bool){
         if(msg.value!=valuePerBounty*numRepeats){
@@ -148,7 +181,6 @@ contract UZMAPContract
         }
         bounties[msg.sender][block.timestamp] = Bounty({repeats:numRepeats, bountyType:bType, bountyReq:bReq, bountyValue:msg.value});
         return true;
-        
     }
     
     function getQualifiedBounties(int64 d2s, int256 png, bytes32 isp) public view returns(address[], uint256[]){
@@ -163,19 +195,19 @@ contract UZMAPContract
                 bytes32 typeOfBounty = keccak256(abi.encodePacked(bounties[addressesWithBounties[i]][bountyAddressTimestamps[addressesWithBounties[i]][j]].bountyType));
                 bytes32 bountyReq = keccak256(abi.encodePacked(bounties[addressesWithBounties[i]][bountyAddressTimestamps[addressesWithBounties[i]][j]].bountyReq));
                 if(typeOfBounty == keccak256(abi.encodePacked("ISP")) && bountyReq == keccak256(abi.encodePacked(isp))){
-                    resAddressesFull[counter] = addressesWithMeasurements[i];
+                    resAddressesFull[counter] = addressesWithBounties[i];
                     resIndexesFull[counter] = bountyAddressTimestamps[addressesWithBounties[i]][j];
                     counter += 1;
                 }else if(typeOfBounty == keccak256(abi.encodePacked("d2s")) 
                             && int(bounties[addressesWithBounties[i]][bountyAddressTimestamps[addressesWithBounties[i]][j]].bountyReq)-100 <= d2s 
                             && int(bounties[addressesWithBounties[i]][bountyAddressTimestamps[addressesWithBounties[i]][j]].bountyReq)+100 >= d2s){
-                    resAddressesFull[counter] = addressesWithMeasurements[i];
+                    resAddressesFull[counter] = addressesWithBounties[i];
                     resIndexesFull[counter] = bountyAddressTimestamps[addressesWithBounties[i]][j];
                     counter += 1;
                 }else if(typeOfBounty == keccak256(abi.encodePacked("ping")) 
                             && int(bounties[addressesWithBounties[i]][bountyAddressTimestamps[addressesWithBounties[i]][j]].bountyReq)-10 <= png 
                             && int(bounties[addressesWithBounties[i]][bountyAddressTimestamps[addressesWithBounties[i]][j]].bountyReq)+10 >= png){
-                    resAddressesFull[counter] = addressesWithMeasurements[i];
+                    resAddressesFull[counter] = addressesWithBounties[i];
                     resIndexesFull[counter] = bountyAddressTimestamps[addressesWithBounties[i]][j];
                     counter += 1;
                 }
@@ -190,12 +222,17 @@ contract UZMAPContract
         return (resAddresses, resIndexes);
     }
     
+    function getAddressBountyTimestamps(address addr) public view returns(uint[]){
+        require(addressHasBounties[addr]);
+        return bountyAddressTimestamps[addr];
+    }
+    
     function getBounty(address addr, uint timest) public view returns(Bounty){
         require(addressHasBounties[addr] && bounties[addr][timest].repeats>0);
         return bounties[addr][timest];
     }
     
-    function claimBounty(address bountyAddr, uint timest) external returns (bool){
+    function claimBounty(address bountyAddr, uint timest) external payable returns (bool){
         bool addrHasMeasurements = false;
         for (uint i=0; i<addressesWithMeasurements.length; i++) {
             if(addressesWithMeasurements[i] == msg.sender){

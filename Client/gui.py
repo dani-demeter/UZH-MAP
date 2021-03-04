@@ -10,6 +10,8 @@ from textwrap import dedent
 from threading import Thread
 import subprocess
 import os
+import ctypes
+import getpass
 from ast import literal_eval as make_tuple
 import json
 
@@ -152,6 +154,13 @@ class MAPGUI:
 
         # self.label.pack(ipadx=4, padx=4, ipady=4, pady=4, fill='both')
 
+    def isAdmin(self):
+        try:
+            is_admin = (os.getuid() == 0)
+        except AttributeError:
+            is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+        return is_admin
+
     def placeBounty(self):
         bountyType = self.bounty_type.get()
         bountyReq = self.bountyValue.get()
@@ -169,6 +178,10 @@ class MAPGUI:
         self.update(q)  # start update loop
 
     def startMeasurements(self):
+        if(not self.isAdmin()):
+            self.addNewLogMessage('Need admin privileges to continue!')
+            return
+        username = getpass.getuser()
         ports = make_tuple(self.portsEntered.get())
         validPorts = ()
         for port in ports:
@@ -180,13 +193,14 @@ class MAPGUI:
                     validPorts += (port, )
             except ValueError:
                 print("Not an int")
-
+        self.results = {}
         self.startMeasurementButton['state'] = 'disabled'
         self.placeBountyButton['state'] = 'disabled'
         self.process = Popen(['python', os.path.dirname(
-            os.path.abspath(__file__))+'/test.py', str(validPorts)], stdout=PIPE)
+            os.path.abspath(__file__))+'/client.py', str(validPorts)], stdout=PIPE)
         q = Queue(maxsize=1024)
         t = Thread(target=self.reader_thread, args=[q])
+        self.measurementInProgress = True
         t.daemon = True  # close pipe if GUI process exits
         t.start()
         self.update(q)  # start update loop
@@ -201,36 +215,62 @@ class MAPGUI:
             q.put(None)
 
     def update(self, q):
-        """Update GUI with items from the queue."""
         for line in iter_except(q.get_nowait, Empty):  # display all content
-            if line is None:
+            if (line is None) or (line.decode("utf-8").rstrip() == 'exit'):
                 if hasattr(self, 'process'):
                     self.process.kill()
-                self.startMeasurementButton['state'] = 'normal'
-                self.placeBountyButton['state'] = 'normal'
+                    if hasattr(self, 'measurementInProgress') and self.measurementInProgress:
+                        self.finishMeasurements()
+                        self.measurementInProgress = False
+                    else:
+                        self.startMeasurementButton['state'] = 'normal'
+                        self.placeBountyButton['state'] = 'normal'
+                else:
+                    self.startMeasurementButton['state'] = 'normal'
+                    self.placeBountyButton['state'] = 'normal'
                 # self.quit()
                 return
             else:
-                incomingMessage = json.loads(line.decode("utf-8"))
-                if incomingMessage['tag'] == 'progress':
-                    progressbar = "[" + incomingMessage['completed']*"==" + (
-                        incomingMessage['total'] - incomingMessage['completed'] - 1)*"  " + "]"
-                    # separatedMessage = incomingMessage[1:-3].split('/')
-                    # separatedMessage = list(
-                    #     map(lambda x: int(x), separatedMessage))
-                    # progressbar = "["+separatedMessage[0]*"==" + \
-                    #     (separatedMessage[1]-separatedMessage[0]-1)*"  "+"]"
-                    # print(progressbar)
-                    # print(separatedMessage)
-                    self.progressLabel['text'] = progressbar
-                elif incomingMessage['tag'] == 'log':
-                    if self.logLabel['text'].count('\n') >= 4:
-                        firstLineEnd = self.logLabel['text'].find('\n')
-                        self.logLabel['text'] = self.logLabel['text'][firstLineEnd+1:]
-                    self.logLabel['text'] += '\n' + \
-                        incomingMessage['message']  # update GUI
-                break  # display no more than one line per 40 milliseconds
-        self.root.after(40, self.update, q)  # schedule next update
+                incomingMessage = ""
+                try:
+                    incomingMessage = json.loads(line.decode("utf-8"))
+                    if incomingMessage['tag'] == 'progress':
+                        progressbar = "[" + incomingMessage['completed']*"==" + (
+                            incomingMessage['total'] - incomingMessage['completed'])*"  " + "]"
+                        self.progressLabel['text'] = progressbar
+                    elif incomingMessage['tag'] == 'log':
+                        self.addNewLogMessage(incomingMessage['message'])
+                    elif incomingMessage['tag'] == 'result':
+                        self.handleResult(incomingMessage)
+                except ValueError as e:
+                    incomingMessage = line.decode('utf-8')
+                    self.addNewLogMessage(incomingMessage)
+                # incomingMessage = json.loads(line.decode("utf-8"))
+
+                break
+        self.root.after(40, self.update, q)
+
+    def finishMeasurements(self):
+        self.process = Popen(['python', os.path.dirname(
+            os.path.abspath(__file__))+'/SmartContractTest.py', 'finishMeasurements', json.dumps(self.results)], stdout=PIPE)
+        q = Queue(maxsize=1024)
+        t = Thread(target=self.reader_thread, args=[q])
+        t.daemon = True  # close pipe if GUI process exits
+        t.start()
+        self.update(q)  # start update loop
+
+    def handleResult(self, jsonObj):
+        print("Received result:", jsonObj['type'],
+              jsonObj['name'], jsonObj['data'])
+        if jsonObj['type'] not in self.results:
+            self.results[jsonObj['type']] = {}
+        self.results[jsonObj['type']][jsonObj['name']] = jsonObj['data']
+
+    def addNewLogMessage(self, message):
+        if self.logLabel['text'].count('\n') >= 4:
+            firstLineEnd = self.logLabel['text'].find('\n')
+            self.logLabel['text'] = self.logLabel['text'][firstLineEnd+1:]
+        self.logLabel['text'] += '\n' + message
 
     def quit(self):
         if hasattr(self, 'process'):
